@@ -1,125 +1,128 @@
 module Main where
 
 import Graphics.Gloss
+import Graphics.Gloss.Data.Vector
 -- https://lodev.org/cgtutor/raycasting.html#Untextured_Raycaster_
-
-screenWidth  = 500
-screenHeight = 500
-
-mapWidth  = 10
-mapHeight = 10
+-- https://github.com/vinibiavatti1/RayCastingTutorial/wiki/RayCasting
 
 data World = World {
-  player_F   :: Player,
-  worldMap_F :: [[Int]]
+               worldScreen :: Screen,
+               worldPlayer :: Player,
+               worldMap    :: [[Int]]
                    }
 
-data Player = Player {
-  position_F  :: Vector,
-  direction_F :: Vector,
-  plane_F     :: Vector
+data Screen = Screen {
+                screenDimensions :: (Float, Float)
                      }
 
 data Ray = Ray {
-  rayOrigin_F    :: Vector,
-  rayDirection_F :: Vector,
-  rayDeltaDist_F :: Vector,
-  raySideDist_F  :: Vector,
-  rayMapSector_F :: Vector,
-  raySteps_F     :: (Float, Float),
-  rayVertHoriz_F :: Int,
-  rayHit_F       :: Bool
-               }
+             rayOrigin    :: Vector,
+             rayDirection :: Vector,
+             rayMapSector :: (Int, Int),
+             rayDistance  :: Float,
+             rayColor     :: Color
+               } deriving (Show)
+
+data Player = Player {
+                playerFOV       :: Float,
+                playerPosition  :: Vector,
+                playerDirection :: Float
+                     }
+
+precision :: Float
+precision = 64
+
+colorChoice :: Int -> Color
+colorChoice code
+  | code == 1 = red
+  | code == 2 = yellow
+  | code == 3 = cyan
+  | code == 4 = magenta
+  | otherwise = black
+
+degreesToRadians :: Float -> Float
+degreesToRadians d = d * pi / 180
 
 truncateV :: Vector -> Vector
 truncateV vector = (fromIntegral (floor $ fst vector),
                     fromIntegral (floor $ snd vector))
 
-rayDirection :: Vector -> Vector -> Float -> Vector
-rayDirection dir plane cameraX = (fst dir + fst plane * cameraX,
-                                  snd dir + snd plane * cameraX)
+roundV :: Vector -> (Int, Int)
+roundV vec = (round $ fst vec, round $ snd vec)
 
-deltaDistance :: Vector -> Vector
-deltaDistance rayDir = (abs (1 / fst rayDir), abs (1 / snd rayDir))
-                       
-sideDistance :: Float -> Float -> Float -> Float
-sideDistance step pos delta
-  | step == (-1) = (pos - fromIntegral (floor pos)) * delta
-  | otherwise    = (fromIntegral (floor pos) + 1 - pos) * delta
+getMapValV :: [[Int]] -> Vector -> Int
+getMapValV mapW vec = mapW !! snd vecR !! fst vecR
+                       where vecR = roundV vec
 
-determineStep :: Float -> Float
-determineStep rayDirVal
-  | rayDirVal < 0 = (-1)
-  | otherwise     = 1
+raycastIncrementRad :: World -> Float
+raycastIncrementRad world = degreesToRadians ( (playerFOV $ worldPlayer world) / (fst $ screenDimensions $ worldScreen world) )
 
-raycast :: World -> Player -> Int -> Bool
-raycast world player column = do
-  let cameraX   = 2 * column `div` screenWidth - 1
-      ray       = Ray (position_F player) (rayDir) (deltaDist) (sideDist) (truncateV $ position_F player) steps 0 False
-                    where rayDir    = rayDirection (direction_F player) (plane_F player) (fromIntegral cameraX)
-                          deltaDist = deltaDistance rayDir
-                          steps     = (determineStep $ fst rayDir, determineStep $ snd rayDir)
-                          sideDist  = ( sideDistance (fst steps) (fst $ position_F player) (fst deltaDist), sideDistance (snd steps) (snd $ position_F player) (snd deltaDist) )
-  True
+raycast :: World -> [Ray]
+raycast world = do
+  let player   = worldPlayer world
+      rayAngle = degreesToRadians (playerDirection player - playerFOV player / 2)
+ 
+  [ raycast' world rayDir rayOrigin |
+      x <- [0..(fst $ roundV $ screenDimensions $ worldScreen world) - 1],
+      let rayDir    = rayAngle + (raycastIncrementRad world) * fromIntegral x,
+      let rayOrigin = playerPosition player
+                                                                                                      ]
 
-raycast' :: World -> Ray -> Vector -> Ray
-raycast' world ray delta
-  | rayHit_F ray == True = ray
-  | otherwise            = raycast' world (determine $ increment ray) delta
-                             where increment ray
-                                     | (fst $ raySideDist_F ray) < (snd $ raySideDist_F ray) = do
-                                         let newSideDist  = ((fst $ raySideDist_F ray) + fst delta, snd $ raySideDist_F ray)
-                                             newMapSector = ( (fst $ rayMapSector_F ray) + (fst $ raySteps_F ray), snd $ raySteps_F ray )
-                                         Ray (rayOrigin_F ray) (rayDirection_F ray) (rayDeltaDist_F ray) (newSideDist) (newMapSector) (raySteps_F ray) 0 (rayHit_F ray)
-                                     | otherwise                                         = do
-                                         let newSideDist  = (fst $ raySideDist_F ray, (snd $ raySideDist_F ray) + snd delta)
-                                             newMapSector = ( fst $ rayMapSector_F ray, (snd $ rayMapSector_F ray) + (snd $ raySteps_F ray) )
-                                         Ray (rayOrigin_F ray) (rayDirection_F ray) (rayDeltaDist_F ray) (newSideDist) (newMapSector) (raySteps_F ray) 1 (rayHit_F ray)
-                                   determine ray
-                                     | worldMap_F world !! (round $ snd $ rayMapSector_F ray) !! (round $ fst $ rayMapSector_F ray) /= 0 = Ray {
-                                                                                                                                             rayOrigin_F    = rayOrigin_F ray,
-                                                                                                                                             rayDirection_F = rayDirection_F ray,
-                                                                                                                                             rayDeltaDist_F = rayDeltaDist_F ray,
-                                                                                                                                             raySideDist_F  = raySideDist_F ray,
-                                                                                                                                             rayMapSector_F = rayMapSector_F ray,
-                                                                                                                                             raySteps_F     = raySteps_F ray,
-                                                                                                                                             rayVertHoriz_F = rayVertHoriz_F ray,
-                                                                                                                                             rayHit_F       = True
-                                                                                                                                               }
-                                     | otherwise                                                                                         = Ray {
-                                                                                                                                             rayOrigin_F    = rayOrigin_F ray,
-                                                                                                                                             rayDirection_F = rayDirection_F ray,
-                                                                                                                                             rayDeltaDist_F = rayDeltaDist_F ray,
-                                                                                                                                             raySideDist_F  = raySideDist_F ray,
-                                                                                                                                             rayMapSector_F = rayMapSector_F ray,
-                                                                                                                                             raySteps_F     = raySteps_F ray,
-                                                                                                                                             rayVertHoriz_F = rayVertHoriz_F ray,
-                                                                                                                                             rayHit_F       = False
-                                                                                                                                               }
-  
-window :: Display
-window = InWindow "Universe" (screenWidth, screenHeight) (100, 100)
+raycast' :: World -> Float -> Vector -> Ray
+raycast' world rayAngle rayPos
+  | getMapValV (worldMap world) rayPos /= 0 = Ray {
+                                               rayOrigin    = playerPosition $ worldPlayer world,
+                                               rayDirection = unitVectorAtAngle rayAngle,
+                                               rayMapSector = roundV rayPos,
+                                               rayDistance  = magV ((fst rayPos) - (fst $ playerPosition $ worldPlayer world),
+                                                                    (snd rayPos) - (snd $ playerPosition $ worldPlayer world)) *
+                                                              cos (rayAngle - (playerDirection $ worldPlayer world)),
+                                               rayColor     = colorChoice (getMapValV (worldMap world) (rayPos))
+                                                                              }
+  | otherwise                                                           = do
+      let rayCos = (cos rayAngle) / precision
+          raySin = (sin rayAngle) / precision
+      raycast' world rayAngle (fst rayPos + rayCos, snd rayPos + raySin)
+
+
+drawRay :: World -> Ray -> Float -> Picture
+drawRay world ray x = do
+  let halfHt = ((snd $ screenDimensions $ worldScreen world) / 2)
+      wallHt = (halfHt / rayDistance ray)
+  pictures [ color (dark $ dark $ dark blue)                                 $ line [(x, 0), (x, halfHt - wallHt)],
+             color (iterate dim (rayColor ray) !! (round $ rayDistance ray)) $ line [(x, halfHt - wallHt), (x, halfHt + wallHt)],
+             color (dark $ dark $ dark white)                                $ line [(x, halfHt + wallHt), (x, halfHt * 2)]
+           ]
+    
+window :: World -> Display
+window world = InWindow "Universe" dimensions offset
+                 where dimensions = roundV $ truncateV $ screenDimensions $ worldScreen world
+                       offset     = (100, 100)
 
 background :: Color
 background = black
 
 drawing :: World -> Picture
-drawing world = pictures ((build $ worldMap_F world) ++ [translate (fst playPos) (snd playPos) $ color green $ circleSolid 2])
-                  where playPos = position_F $ player_F world
-                        
-build :: [[Int]] -> [Picture]
-build codes = [translate (fromIntegral x * 20) (fromIntegral y * (-20)) $ build' z | x <- [0..length (codes !! 0) - 1],
-                                                                                  y <- [0..length codes - 1],
-                                                                                  let z = codes !! y !! x ]
-              where build' code
-                      | code == 0 = color red $ rectangleSolid 20 20
-                      | code == 1 = color blue $ rectangleSolid 20 20
-                      | otherwise = color white $ rectangleSolid 20 20
+drawing world = pictures rays 
+                  where rays = [ drawRay world (raycast world !! x) (fromIntegral x) | x <- [ 0..(length $ raycast world) - 1 ] ] 
 
 main :: IO ()
 main = do
-  let player  = Player (20, (-20)) ((1), 0) (0, 0.66)
-      world   = World player [ [1,1,1,1,1,1,1,1,1,1],[1,0,0,0,0,1,0,0,1,1],[1,1,1,1,0,0,0,0,0,1],[1,0,0,0,0,0,1,1,1,1],[1,0,0,0,0,1,0,0,0,1],
-                               [1,0,0,0,0,0,0,0,0,1],[1,0,0,0,1,1,1,1,0,1],[1,1,1,1,0,0,0,0,0,1],[1,1,0,0,0,0,1,1,0,1],[1,1,1,1,1,1,1,1,1,1] ]
+  let screen = Screen (500, 500)
+      player = Player 60 (1,3) 0
+      mapW   = [
+                 [1,1,1,1,1,1,1,1],
+                 [1,0,0,0,0,0,0,1],
+                 [1,0,0,2,0,0,3,1],
+                 [1,0,0,0,0,0,0,1],
+                 [1,0,0,0,0,4,0,1],
+                 [1,0,0,0,0,0,0,1],
+                 [1,0,0,0,0,0,0,1],
+                 [1,1,1,1,1,1,1,1]
+               ]
+      world  = World screen player mapW
 
-  display window background (drawing world)
+  putStrLn $ show $ playerDirection player
+  mapM_ putStrLn (map show (raycast world))
+  
+  display (window world) background (drawing world)
