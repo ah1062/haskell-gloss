@@ -115,7 +115,7 @@ gameCycle :: Float -> World -> World
 gameCycle timeStep world = world
                  
 window :: World -> Display
-window world = InWindow "Universe" dimensions offset
+window world = InWindow "Raycasting World" dimensions offset
                  where dimensions = roundV $ truncateV $ screenDimensions $ worldScreen world
                        offset     = (100, 100)
 
