@@ -60,7 +60,7 @@ getMapValV mapW vec = mapW !! snd vecR !! fst vecR
                        where vecR = roundV vec
 
 raycastIncrementRad :: World -> Float
-raycastIncrementRad world = degreesToRadians ( (playerFOV $ worldPlayer world) / (fst $ screenDimensions $ worldScreen world) )
+raycastIncrementRad world = degreesToRadians ( playerFOV (worldPlayer world) / fst (screenDimensions $ worldScreen world) )
 
 raycast :: World -> [Ray]
 raycast world = do
@@ -68,8 +68,8 @@ raycast world = do
       rayAngle = degreesToRadians (playerDirection player - playerFOV player / 2)
  
   [ raycast' world rayDir rayOrigin |
-      x <- [0..(fst $ roundV $ screenDimensions $ worldScreen world) - 1],
-      let rayDir    = rayAngle + (raycastIncrementRad world) * fromIntegral x,
+      x <- [0..fst (roundV $ screenDimensions $ worldScreen world) - 1],
+      let rayDir    = rayAngle + raycastIncrementRad world * fromIntegral x,
       let rayOrigin = playerPosition player
                                                                                                       ]
 
@@ -79,21 +79,21 @@ raycast' world rayAngle rayPos
                                                rayOrigin    = playerPosition $ worldPlayer world,
                                                rayDirection = unitVectorAtAngle rayAngle,
                                                rayMapSector = roundV rayPos,
-                                               rayDistance  = magV ((fst rayPos) - (fst $ playerPosition $ worldPlayer world),
-                                                                    (snd rayPos) - (snd $ playerPosition $ worldPlayer world)) *
-                                                              cos (rayAngle - (playerDirection $ worldPlayer world)),
-                                               rayColor     = colorChoice (getMapValV (worldMap world) (rayPos))
+                                               rayDistance  = magV (fst rayPos - fst (playerPosition $ worldPlayer world),
+                                                                    snd rayPos - snd (playerPosition $ worldPlayer world)) *
+                                                              cos rayAngle - playerDirection (worldPlayer world),
+                                               rayColor     = colorChoice (getMapValV (worldMap world) rayPos)
                                                                               }
   | otherwise                                                           = do
-      let rayCos = (cos rayAngle) / precision
-          raySin = (sin rayAngle) / precision
+      let rayCos = cos rayAngle / precision
+          raySin = sin rayAngle / precision
       raycast' world rayAngle (fst rayPos + rayCos, snd rayPos + raySin)
 
 
 drawRay :: World -> Ray -> Float -> Picture
 drawRay world ray x = do
-  let halfHt = ((snd $ screenDimensions $ worldScreen world) / 2)
-      wallHt = (halfHt / rayDistance ray)
+  let halfHt = snd (screenDimensions $ worldScreen world) / 2
+      wallHt = halfHt / rayDistance ray
   pictures [
              color (dark $ dark $ dark blue)                 $ line [(x, 0), (x, halfHt - wallHt)],
              color (color' (rayColor ray) (rayDistance ray)) $ line [(x, halfHt - wallHt), (x, halfHt + wallHt)],
@@ -123,8 +123,8 @@ background :: Color
 background = black
 
 drawing :: World -> Picture
-drawing world = translate ((fst $ screenDimensions $ worldScreen world) / (-2)) ((snd $ screenDimensions $ worldScreen world) / (-2)) $ pictures rays 
-                  where rays = [ drawRay world (raycast world !! x) (fromIntegral x) | x <- [ 0..(length $ raycast world) - 1 ] ] 
+drawing world = translate (fst ( screenDimensions $ worldScreen world) / (-2)) (snd (screenDimensions $ worldScreen world) / (-2)) $ pictures rays 
+                  where rays = [ drawRay world (raycast world !! x) (fromIntegral x) | x <- [ 0..length (raycast world)-1 ] ] 
 
 raycastEngine :: IO ()
 raycastEngine = do
@@ -142,7 +142,7 @@ raycastEngine = do
                ]
       world  = World screen player mapW
 
-  putStrLn $ show $ playerDirection player
-  mapM_ putStrLn (map show (raycast world))
+  print (playerDirection player)
+  mapM_ print (raycast world)
   
   play (window world) background 1000 world drawing inputHandle gameCycle
