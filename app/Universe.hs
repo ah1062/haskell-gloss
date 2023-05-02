@@ -89,7 +89,7 @@ timeCycle :: ViewPort -> Float -> World -> World
 timeCycle v f = timestep
 
 window :: World -> Display
-window w = InWindow "Universe" (screen w) (50, 50)
+window w = InWindow "Solar System" (screen w) (50, 50)
 
 background :: Color
 background = black
@@ -98,7 +98,7 @@ drawing :: World -> Picture
 drawing w = pictures [ shapes, lines, strings ]
               where shapes  = pictures [ uncurry translate (planetPosition p) $ color (planetColor p) $ circleSolid (planetRadius p) | 
                                 x <- [0..length (bodies w) - 1], let p = bodies w !! x ]
-                    lines   = pictures [ color (planetColor p) $ line (take 5000 $ reverse $ planetHistory p) |
+                    lines   = pictures [ color (planetColor p) $ line (take 500 $ reverse $ planetHistory p) |
                                 x <- [0..length (bodies w) - 1], let p = bodies w !! x ]
                     strings = pictures [ uncurry translate (sumV [planetPosition p, (0, -planetRadius p * 4)]) $ color (planetColor p) $ scale 0.2 0.2 (text (planetName p)) | 
                                 x <- [0..length (bodies w) - 1], let p = bodies w !! x ] 
